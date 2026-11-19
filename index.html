@@ -125,7 +125,7 @@ function grade(c, g){
 // ───────── Écrans ─────────
 const $ = s => document.querySelector(s);
 const esc = s => s.replace(/[&<>]/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[ch]));
-let screen = "home", revealed = false, draft = "";
+let screen = "home", revealed = false, draft = "", writing = false;
 
 function streak(){
   let n = 0;
@@ -179,8 +179,12 @@ function render(){
           ${draft.trim() ? `<div class="type">Ta réponse</div><div class="mine">${esc(draft)}</div>` : ""}
           <div class="type" style="margin-top:12px">Réponse attendue</div>
           <div class="a">${esc(c.a)}</div>
-        ` : `
+        ` : writing ? `
           <textarea id="ans" placeholder="Écris ta réponse (même approximative) avant de regarder…">${esc(draft)}</textarea>
+        ` : `
+          <p class="muted hint">Formule ta réponse EN ENTIER (à voix basse ou dans ta tête) avant de regarder. « Je crois que je sais » ne compte pas.</p>
+          <button class="ghost" onclick="writing = true; render(); document.getElementById('ans').focus()">✏️ Écrire ma réponse</button>
+          <div style="height:10px"></div>
         `}
       </div>
       ${revealed ? `
@@ -211,10 +215,10 @@ function render(){
   }
 }
 function go(s){ screen = s; render(); window.scrollTo(0,0); }
-function start(){ queue = buildQueue(); idx = 0; relearn = new Set(); revealed = false; draft = ""; go("card"); }
+function start(){ queue = buildQueue(); idx = 0; relearn = new Set(); revealed = false; draft = ""; writing = false; go("card"); }
 function reveal(){ revealed = true; render(); }
 const _grade = grade;
-grade = function(c, g){ revealed = false; draft = ""; _grade(c, g); window.scrollTo(0,0); };
+grade = function(c, g){ revealed = false; draft = ""; writing = false; _grade(c, g); window.scrollTo(0,0); };
 function setNum(k, v){ S[k] = Math.max(0, parseInt(v) || 0); save(); }
 async function exportData(){
   const txt = JSON.stringify(S);
