@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Révisions">
+<meta name="theme-color" content="#4f46e5">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<title>Révisions</title>
+<style>
+:root{
+  --bg:#f6f6fb; --card:#fff; --text:#1a1a2e; --muted:#6b6b80; --line:#e3e3ee;
+  --accent:#4f46e5; --bad:#dc2626; --mid:#d97706; --good:#16a34a;
+  --Probas:#7c3aed; --Python:#0891b2; --Réseau:#2563eb; --Virtualisation:#db2777;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f0f17; --card:#1a1a26; --text:#ececf4; --muted:#9a9ab0; --line:#2c2c3c; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:17px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+body{padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 24px)}
+main{max-width:560px;margin:0 auto}
+h1{font-size:26px;margin:8px 0 4px}
+h2{font-size:18px;margin:22px 0 8px}
+.muted{color:var(--muted)}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+.big{font-size:44px;font-weight:700;line-height:1}
+.row{display:flex;gap:10px;align-items:center}
+.row > *{flex:1}
+button{font:inherit;border:0;border-radius:12px;padding:14px 16px;cursor:pointer;width:100%;
+  background:var(--accent);color:#fff;font-weight:600}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+button:disabled{opacity:.4}
+.bad{background:var(--bad)} .mid{background:var(--mid)} .good{background:var(--good)}
+.chip{display:inline-block;font-size:13px;font-weight:600;color:#fff;border-radius:999px;padding:3px 10px;margin-right:6px}
+.type{font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.q{font-size:19px;font-weight:600;white-space:pre-wrap;margin:12px 0}
+.a{white-space:pre-wrap}
+textarea{width:100%;min-height:120px;font:inherit;padding:12px;border-radius:12px;border:1px solid var(--line);
+  background:var(--bg);color:var(--text);resize:vertical}
+.mine{white-space:pre-wrap;color:var(--muted);border-left:3px solid var(--line);padding-left:10px;margin:8px 0}
+.progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.progress > div{height:100%;background:var(--accent);transition:width .3s}
+label.step{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)}
+label.step input{width:22px;height:22px;margin-top:2px;flex:none}
+.stat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.stat:last-child{border:0}
+input[type=number]{width:80px;font:inherit;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+.top{display:flex;justify-content:space-between;align-items:center}
+.top button{width:auto;padding:8px 12px}
+.hint{font-size:14px}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script src="cards.js"></script>
+<script>
+// ───────── Stockage ─────────
+const KEY = "revisions-v1";
+const INTERVALS = [1, 3, 7, 14, 30, 60, 120]; // jours, comme tes rappels J+1/3/7/14
+function today(off = 0){ const d = new Date(); d.setDate(d.getDate() + off);
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function load(){
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s) return s; } catch(e){}
+  return { cards:{}, newPerDay:20, maxPerDay:30, days:{} };
+}
+let S = load();
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+function day(){ const t = today(); if (!S.days[t]) S.days[t] = { done:0, newDone:0 }; return S.days[t]; }
+
+// ───────── File du jour ─────────
+// une carte créée à la fin d'une séance apparaît le lendemain (J+1)
+function isOn(c){ return !c.d || c.d < today(); }
+function shuffle(a){ for (let i = a.length-1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; }
+function buildQueue(){
+  const t = today(), d = day();
+  const due = CARDS.filter(c => isOn(c) && S.cards[c.id] && S.cards[c.id].due <= t);
+  // nouvelles cartes : dans l'ordre du plan, en alternant les matières
+  const pools = {};
+  CARDS.filter(c => isOn(c) && !S.cards[c.id]).forEach(c => (pools[c.m] = pools[c.m] || []).push(c));
+  const fresh = [];
+  for (let i = 0; Object.values(pools).some(p => p.length > i); i++)
+    Object.values(pools).forEach(p => { if (p[i]) fresh.push(p[i]); });
+  fresh.splice(Math.max(0, S.newPerDay - d.newDone));
+  const room = Math.max(0, S.maxPerDay - d.done);
+  const dueTaken = shuffle(due).slice(0, room);
+  const newTaken = fresh.slice(0, Math.max(0, room - dueTaken.length));
+  return shuffle(dueTaken.concat(newTaken)); // mélange des matières = meilleure mémorisation
+}
+let queue = [], idx = 0, relearn = new Set(), sessionTotal = 0;
+
+// ───────── Notation ─────────
+// Échelle : 1 → 3 → 7 → 14 → 30 → 60 → 120 jours (une nouvelle carte est au cran 0 = J+1 déjà fait)
+// Pas su  → retour au début : demain
+// Bof     → même cran, même délai que la dernière fois (au moins 2 jours)
+// Réussi  → cran suivant : le délai grandit de plus en plus vite
+function schedule(c, g){
+  const st = S.cards[c.id] || { lvl:0 };
+  if (g === 0 || relearn.has(c.id)) return { lvl:0, days:1 };  // 2e essai après un « pas su » → reste à demain
+  if (g === 1) return { lvl:st.lvl, days:Math.max(2, INTERVALS[st.lvl]) };
+  const lvl = Math.min(st.lvl + 1, INTERVALS.length - 1);
+  return { lvl, days:INTERVALS[lvl] };
+}
+const inDays = n => n === 1 ? "demain" : `dans ${n} j`;
+function grade(c, g){
+  const st = S.cards[c.id] || { lvl:0 };
+  const d = day();
+  if (!S.cards[c.id]) d.newDone++;
+  if (!relearn.has(c.id)) d.done++;
+  const n = schedule(c, g);
+  st.lvl = n.lvl;
+  st.due = today(n.days);
+  st.last = today();
+  S.cards[c.id] = st;
+  if (g === 0 && !relearn.has(c.id)){ relearn.add(c.id); queue.push(c); } // on la revoit à la fin
+  save();
+  idx++; render();
+}
+
+// ───────── Écrans ─────────
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>]/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[ch]));
+let screen = "home", revealed = false, draft = "";
+
+function streak(){
+  let n = 0;
+  for (let i = 0; ; i--){ const d = S.days[today(i)]; if (d && d.done > 0) n++; else if (i < 0) break; }
+  return n;
+}
+
+function render(){
+  const app = $("#app");
+  if (screen === "home"){
+    const q = buildQueue();
+    const t = today();
+    const nNew = q.filter(c => !S.cards[c.id]).length;
+    const d = day();
+    const on = CARDS.filter(isOn);
+    const learned = on.filter(c => S.cards[c.id]).length;
+    const tomorrow = CARDS.filter(c => isOn(c) && S.cards[c.id] && S.cards[c.id].due === today(1)).length;
+    app.innerHTML = `
+      <div class="top"><h1>Révisions</h1><button class="ghost" onclick="go('settings')">Réglages</button></div>
+      <div class="muted">${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} · série : ${streak()} j 🔥</div>
+      <div class="box">
+        <div class="big">${q.length}</div>
+        <div class="muted">carte${q.length>1?"s":""} aujourd'hui${nNew ? ` dont ${nNew} nouvelle${nNew>1?"s":""}` : ""}${d.done ? ` · ${d.done} déjà faite${d.done>1?"s":""}` : ""}</div>
+        <div style="height:12px"></div>
+        <button ${q.length ? "" : "disabled"} onclick="start()">${q.length ? "Commencer" : "Rien à revoir aujourd'hui ✅"}</button>
+        ${!q.length && tomorrow ? `<p class="muted hint">Demain : ${tomorrow} carte${tomorrow>1?"s":""} à revoir.</p>` : ""}
+      </div>
+      <div class="box">
+        ${Object.keys(ETAPES).map(m => {
+          const all = CARDS.filter(c => c.m === m && isOn(c));
+          const seen = all.filter(c => S.cards[c.id]).length;
+          const solid = all.filter(c => S.cards[c.id] && S.cards[c.id].lvl >= 3).length;
+          return `<div class="stat"><span><span class="chip" style="background:var(--${m})">${m}</span></span>
+            <span class="muted">${all.length ? `${seen}/${all.length} vues · ${solid} solides` : "pas encore de carte"}</span></div>`;
+        }).join("")}
+      </div>
+      <p class="muted hint">« Solide » = réussie au moins 4 fois d'affilée (intervalle ≥ 14 j). Les cartes d'une séance de révision arrivent le lendemain.</p>`;
+  }
+  else if (screen === "card"){
+    if (idx >= queue.length){ screen = "done"; return render(); }
+    const c = queue[idx];
+    const pct = Math.round(100 * idx / queue.length);
+    app.innerHTML = `
+      <div class="top"><span class="muted">${idx+1} / ${queue.length}</span><button class="ghost" onclick="go('home')">Quitter</button></div>
+      <div class="progress"><div style="width:${pct}%"></div></div>
+      <div class="box">
+        <span class="chip" style="background:var(--${c.m})">${c.m}</span><span class="type">${c.t}${relearn.has(c.id) && S.cards[c.id] && S.cards[c.id].last === today() ? " · 2e essai" : ""}</span>
+        <div class="muted hint" style="margin-top:6px">Étape ${c.e} — ${ETAPES[c.m][c.e]}</div>
+        <div class="q">${esc(c.q)}</div>
+        ${revealed ? `
+          ${draft.trim() ? `<div class="type">Ta réponse</div><div class="mine">${esc(draft)}</div>` : ""}
+          <div class="type" style="margin-top:12px">Réponse attendue</div>
+          <div class="a">${esc(c.a)}</div>
+        ` : `
+          <textarea id="ans" placeholder="Écris ta réponse (même approximative) avant de regarder…">${esc(draft)}</textarea>
+        `}
+      </div>
+      ${revealed ? `
+        <div class="row">
+          ${["Pas su","Bof","Réussi"].map((name, g) => `<button class="${["bad","mid","good"][g]}" onclick="grade(queue[idx],${g})">${name}<br><small style="font-weight:400;opacity:.85">${inDays(schedule(c, g).days)}</small></button>`).join("")}
+        </div>
+        <p class="muted hint">Pas su → demain + revue en fin de séance · Bof → même délai que la dernière fois · Réussi → délai suivant (1 → 3 → 7 → 14 → 30 → 60 j)</p>
+      ` : `<button onclick="reveal()">Voir la réponse</button>`}`;
+    const ta = $("#ans"); if (ta) ta.addEventListener("input", e => draft = e.target.value);
+  }
+  else if (screen === "done"){
+    app.innerHTML = `
+      <h1>Fini pour aujourd'hui 🎉</h1>
+      <div class="box"><div class="big">${day().done}</div><div class="muted">cartes révisées aujourd'hui · série ${streak()} j</div></div>
+      <button onclick="go('home')">Retour</button>`;
+  }
+  else if (screen === "settings"){
+    app.innerHTML = `
+      <div class="top"><h1>Réglages</h1><button class="ghost" onclick="go('home')">OK</button></div>
+      <h2>Rythme</h2>
+      <div class="box">
+        <div class="stat"><span>Nouvelles cartes / jour</span><input type="number" min="0" max="50" value="${S.newPerDay}" onchange="setNum('newPerDay', this.value)"></div>
+        <div class="stat"><span>Maximum de cartes / jour</span><input type="number" min="5" max="100" value="${S.maxPerDay}" onchange="setNum('maxPerDay', this.value)"></div>
+      </div>
+      <h2>Sauvegarde</h2>
+      <p class="muted hint">Ta progression est stockée sur le téléphone uniquement. Copie-la de temps en temps (Notes, mail…) pour ne pas la perdre.</p>
+      <div class="row"><button class="ghost" onclick="exportData()">Copier ma progression</button><button class="ghost" onclick="importData()">Restaurer</button></div>`;
+  }
+}
+function go(s){ screen = s; render(); window.scrollTo(0,0); }
+function start(){ queue = buildQueue(); idx = 0; relearn = new Set(); revealed = false; draft = ""; go("card"); }
+function reveal(){ revealed = true; render(); }
+const _grade = grade;
+grade = function(c, g){ revealed = false; draft = ""; _grade(c, g); window.scrollTo(0,0); };
+function setNum(k, v){ S[k] = Math.max(0, parseInt(v) || 0); save(); }
+async function exportData(){
+  const txt = JSON.stringify(S);
+  try { await navigator.clipboard.writeText(txt); alert("Progression copiée ✅ Colle-la dans une note."); }
+  catch(e){ prompt("Copie ce texte :", txt); }
+}
+function importData(){
+  const txt = prompt("Colle ici ta progression sauvegardée :");
+  if (!txt) return;
+  try { const s = JSON.parse(txt); if (!s.cards) throw 0; S = s; save(); alert("Progression restaurée ✅"); go("home"); }
+  catch(e){ alert("Texte invalide."); }
+}
+render();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>

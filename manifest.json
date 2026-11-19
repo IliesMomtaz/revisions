@@ -1,0 +1,9 @@
+{
+  "name": "Révisions",
+  "short_name": "Révisions",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#4f46e5",
+  "theme_color": "#4f46e5",
+  "icons": [{ "src": "icon.png", "sizes": "180x180", "type": "image/png" }]
+}
